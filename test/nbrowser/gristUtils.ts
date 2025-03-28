@@ -12,6 +12,7 @@ import { stackWrapFunc, stackWrapOwnMethods, WebDriver } from 'mocha-webdriver';
 import * as path from 'path';
 import * as PluginApi from 'app/plugin/grist-plugin-api';
 
+import { BaseAPI } from 'app/common/BaseAPI';
 import {CommandName} from 'app/client/components/commandList';
 import {csvDecodeRow} from 'app/common/csvFormat';
 import { AccessLevel } from 'app/common/CustomWidget';
@@ -29,7 +30,7 @@ import { getAppRoot } from 'app/server/lib/places';
 
 import { GristWebDriverUtils, PageWidgetPickerOptions,
          WindowDimensions as WindowDimensionsBase } from 'test/nbrowser/gristWebDriverUtils';
-import { HomeUtil } from 'test/nbrowser/homeUtil';
+import { APIConstructor, HomeUtil } from 'test/nbrowser/homeUtil';
 import { server } from 'test/nbrowser/testServer';
 import type { Cleanup } from 'test/nbrowser/testUtils';
 import { fetchScreenshotAndLogs } from 'test/nbrowser/webdriverUtils';
@@ -67,6 +68,7 @@ export const uploadFixtureDoc = homeUtil.uploadFixtureDoc.bind(homeUtil);
 export const getWorkspaceId = homeUtil.getWorkspaceId.bind(homeUtil);
 export const listDocs = homeUtil.listDocs.bind(homeUtil);
 export const createHomeApi = homeUtil.createHomeApi.bind(homeUtil);
+export const createApi = homeUtil.createApi.bind(homeUtil);
 export const getApiKey = homeUtil.getApiKey.bind(homeUtil);
 export const simulateLogin = homeUtil.simulateLogin.bind(homeUtil);
 export const removeLogin = homeUtil.removeLogin.bind(homeUtil);
@@ -429,11 +431,11 @@ export async function getVisibleGridCellsFast(colOrOptions: any, rowNums?: numbe
   const cols = arguments[0];
   const rowNums = arguments[1];
   // Read all columns and create object { ['ColName'] : index }
-  const columns = Object.fromEntries([...document.querySelectorAll(".g-column-label")]
+  const columns = Object.fromEntries([...document.querySelectorAll(".active_section .g-column-label")]
                       .map((col, index) => [col.innerText, index]))
   const result = [];
   // Read all rows and create object { [rowIndex] : RowNumberElement }
-  const rowNumElements = Object.fromEntries([...document.querySelectorAll(".gridview_data_row_num")]
+  const rowNumElements = Object.fromEntries([...document.querySelectorAll(".active_section .gridview_data_row_num")]
                             .map((row) => [Number(row.innerText), row]))
   for(const r of rowNums) {
     // If this is addRow, insert undefined x cols.length.
@@ -524,6 +526,13 @@ export function getDetailCell(colOrOptions: string|ICellSelect, rowNum?: number,
     {col: colOrOptions.col, rowNums: [colOrOptions.rowNum], section: colOrOptions.section, mapper} :
     {col: colOrOptions, rowNums: [rowNum!], section, mapper});
   return new WebElementPromise(driver, getVisibleDetailCells(options).then((elems) => elems[0]));
+}
+
+/**
+ * Helper function for Toggle column to check if it is checked or not.
+ */
+export function isChecked(cell: WebElement) {
+  return cell.find('.widget_checkmark').isDisplayed();
 }
 
 /**
@@ -627,12 +636,42 @@ export async function getCardFieldLabels() {
 /**
  * Resize the given grid column by a given number of pixels.
  */
-export async function resizeColumn(colOptions: IColHeader, deltaPx: number) {
+export async function resizeColumn(colOptions: string|IColHeader, deltaPx: number) {
   await getColumnHeader(colOptions).find('.ui-resizable-handle').mouseMove();
   await driver.mouseDown();
   await driver.mouseMoveBy({x: deltaPx});
   await driver.mouseUp();
   await waitForServer();
+}
+
+/**
+ * Checks the width of visible column.
+ */
+export async function assertColumnWidth(colOptions: string|IColHeader, width: number) {
+  assert.closeTo((await getColumnHeader(colOptions).rect()).width, width, 2);
+}
+
+/**
+ * Moves one column onto another column (moving it to its right or left, depending on the order).
+ * Simulates drag and drop of the column header.
+ */
+export async function moveColumn(which: string|IColHeader, where: string|IColHeader) {
+  await selectColumn(which);
+  await getColumnHeader(which).mouseMove({y: 1});
+  await driver.mouseDown();
+  await waitToPass(async () => {
+     assert.isTrue(await driver.find('.active_section .col_indicator_line').isDisplayed());
+  });
+  await getColumnHeader(where).mouseMove({y: 1});
+  await driver.mouseUp();
+  await waitToPass(async () => {
+    assert.isFalse(await driver.find('.active_section .col_indicator_line').isDisplayed());
+  });
+}
+
+
+export async function getColumnWidth(colOptions: string|IColHeader) {
+  return (await getColumnHeader(colOptions).rect()).width;
 }
 
 /**
@@ -966,7 +1005,7 @@ export async function fileDialogUpload(filePath: string, triggerDialogFunc: () =
   // Hack to upload multiple files, paths should be separated with '\n'.
   // It only seems to work with Chrome
   const paths = filePath.split(',').map(f => path.resolve(fixturesRoot, f)).join("\n");
-  await driver.find('#file_dialog_input').sendKeys(paths);
+  await driver.findWait('#file_dialog_input', 100).sendKeys(paths);
 }
 
 /** Opens upload dialog for a cell */
@@ -1011,7 +1050,7 @@ export async function importFileDialog(filePath: string): Promise<void> {
   await fileDialogUpload(filePath, async () => {
     await driver.wait(() => driver.find('.test-dp-add-new').isDisplayed(), 3000);
     await driver.findWait('.test-dp-add-new', 1000).doClick();
-    await driver.findContent('.test-dp-import-option', /Import from file/i).doClick();
+    await findOpenMenuItem('.test-dp-import-option', /Import from file/i).doClick();
   });
   await driver.findWait('.test-importer-dialog', 5000);
   await waitForServer(15_000);
@@ -1120,7 +1159,7 @@ export async function getPreviewContents<T = string>(cols: number[], rowNums: nu
 export async function docMenuImport(filePath: string) {
   await fileDialogUpload(filePath, async () => {
     await driver.findWait('.test-dm-add-new', 1000).doClick();
-    await driver.find('.test-dm-import').doClick();
+    await driver.findWait('.test-dm-import', 100).doClick();
   });
 }
 
@@ -1226,6 +1265,8 @@ export async function openPage(name: string|RegExp) {
 export async function openPageMenu(pageName: RegExp|string) {
   await getPageItem(pageName).mouseMove()
     .find('.test-docpage-dots').click();
+  // Wait for the menu to appear.
+  await driver.findWait('.grist-floating-menu', 100);
 }
 
 /**
@@ -1285,6 +1326,7 @@ export async function getPageTree(): Promise<PageTree[]> {
  */
 export async function addNewTable(name?: string) {
   await driver.findWait('.test-dp-add-new', 2000).click();
+  await findOpenMenu();
   await driver.find('.test-dp-empty-table').click();
   if (name) {
     const prompt = await driver.find(".test-modal-prompt");
@@ -1316,7 +1358,7 @@ export async function addNewPage(
 
 export async function duplicatePage(name: string|RegExp, newName?: string) {
   await openPageMenu(name);
-  await driver.find('.test-docpage-duplicate').click();
+  await driver.findWait('.test-docpage-duplicate', 100).click();
 
   if (newName) {
     // Input will select text on focus, which can alter the text we enter,
@@ -1338,6 +1380,7 @@ export async function duplicatePage(name: string|RegExp, newName?: string) {
 export async function openAddWidgetToPage() {
   await driver.findWait('.test-dp-add-new', 2000).doClick();
   await driver.findWait('.test-dp-add-widget-to-page', 2000).doClick();
+  await driver.findWait('.test-wselect-container', 100);
 }
 
 export type WidgetType = 'Table' | 'Card' | 'Card List' | 'Chart' | 'Custom';
@@ -1376,7 +1419,7 @@ export async function removePage(name: string|RegExp, options: {
   cancel?: boolean,
 } = { }) {
   await openPageMenu(name);
-  assert.equal(await driver.find('.test-docpage-remove').matches('.disabled'), false);
+  assert.equal(await driver.findWait('.test-docpage-remove', 100).matches('.disabled'), false);
   await driver.find('.test-docpage-remove').click();
   const popups = await driver.findAll(".test-removepage-popup");
   if (options.expectPrompt === true) {
@@ -1415,7 +1458,7 @@ export async function removePage(name: string|RegExp, options: {
  */
 export async function renameTable(tableId: string, newName: string) {
   await driver.executeScript(`
-    return window.gristDocPageModel.gristDoc.get().renameTable(arguments[0], arguments[1]);
+    return window.gristDocPageModel.gristDoc.get().testRenameTable(arguments[0], arguments[1]);
   `, tableId, newName);
   await waitForServer();
 }
@@ -1749,6 +1792,7 @@ export async function isRawTableOpened() {
 
 export async function closeRawTable() {
   await driver.find('.test-raw-data-close-button').click();
+  await waitToPass(async () => assert.isFalse(await driver.find('.test-raw-data-close-button').isPresent()));
 }
 
 /**
@@ -1757,7 +1801,7 @@ export async function closeRawTable() {
 export async function openSectionMenu(which: 'sortAndFilter'|'viewLayout', section?: string|WebElement) {
   const sectionElem = section ? await getSection(section) : await driver.findWait('.active_section', 4000);
   await sectionElem.find(`.test-section-menu-${which}`).click();
-  return await driver.findWait('.grist-floating-menu', 100);
+  return await findOpenMenu(100);
 }
 
 /**
@@ -1776,7 +1820,7 @@ const ColumnMenuOption: { [id: string]: string; } = {
 
 async function openColumnMenuHelper(col: IColHeader|string, option?: string): Promise<WebElement> {
   await getColumnHeader(typeof col === 'string' ? {col} : col).mouseMove().find('.g-column-main-menu').click();
-  const menu = await driver.findWait('.grist-floating-menu', 100);
+  const menu = await findOpenMenu(100);
   if (option) {
     await menu.findContent('li', option).click();
     const waitForElem = ColumnMenuOption[option];
@@ -1827,7 +1871,7 @@ export async function setType(
   await driver.find('.test-right-tab-field').click();
   await driver.find('.test-fbuilder-type-select').click();
   type = typeof type === 'string' ? exactMatch(type) : type;
-  await driver.findContentWait('.test-select-menu .test-select-row', type, 500).click();
+  await findOpenMenuItem('.test-select-row', type, 500).click();
   if (!skipWait || apply) { await waitForServer(); }
   if (apply) {
     await driver.findWait('.test-type-transform-apply', 1000).click();
@@ -1854,7 +1898,7 @@ export async function getFieldWidgetType(): Promise<string> {
  */
 export async function setFieldWidgetType(type: string) {
   await driver.find(".test-fbuilder-widget-select").click();
-  await driver.findContent('.test-select-menu li', exactMatch(type)).click();
+  await findOpenMenuItem('li', exactMatch(type)).click();
   await waitForServer();
 }
 
@@ -1959,7 +2003,7 @@ export async function openDocDropdown(docNameOrRow: string|WebElement): Promise<
 export async function openAccessRulesDropdown(): Promise<void> {
   await driver.find('.test-tools-access-rules').mouseMove();
   await driver.find('.test-tools-access-rules-trigger').mouseMove().click();
-  await driver.findWait('.grist-floating-menu', 1000);
+  await findOpenMenu(1000);
 }
 
 /**
@@ -2035,7 +2079,7 @@ export async function saveAcls(clickRemove: boolean = false): Promise<boolean> {
 export function openRowMenu(rowNum: number) {
   const row = driver.findContent('.active_section .gridview_data_row_num', String(rowNum));
   return driver.withActions((actions) => actions.contextClick(row))
-    .then(() => driver.findWait('.grist-floating-menu', 1000));
+    .then(() => findOpenMenu(1000));
 }
 
 export async function removeRow(rowNum: number) {
@@ -2047,7 +2091,7 @@ export async function openCardMenu(rowNum: number) {
   const section = await driver.find('.active_section');
   const firstRow = await section.findContent('.detail_row_num', String(rowNum));
   await firstRow.find('.test-card-menu-trigger').click();
-  return await driver.findWait('.grist-floating-menu', 1000);
+  return await findOpenMenu(1000);
 }
 
 /**
@@ -2064,11 +2108,11 @@ export async function completeCopy(options: {destName?: string, destWorkspace?: 
   }
   if (options.destOrg !== undefined) {
     await driver.find('.test-copy-dest-org .test-select-open').click();
-    await driver.findContent('.test-select-menu li', options.destOrg).click();
+    await findOpenMenuItem('li', options.destOrg).click();
   }
   if (options.destWorkspace !== undefined) {
     await driver.findWait('.test-copy-dest-workspace .test-select-open', 1000).click();
-    await driver.findContent('.test-select-menu li', options.destWorkspace).click();
+    await findOpenMenuItem('li', options.destWorkspace).click();
   }
 
   await waitForServer();
@@ -2425,6 +2469,16 @@ export class Session {
     return createHomeApi(this.settings.name, this.settings.orgDomain, this.settings.email);
   }
 
+  /**
+   * Creates a generic API object for the current user.
+   */
+  public createApi<T extends BaseAPI>(creator: APIConstructor<T>) {
+    if (this.settings.email === 'anon@getgrist.com') {
+      return createApi(creator, null, this.settings.orgDomain);
+    }
+    return createApi(creator, this.settings.name, this.settings.orgDomain, this.settings.email);
+  }
+
   public getApiKey(): string|null {
     if (this.settings.email === 'anon@getgrist.com') {
       return getApiKey(null);
@@ -2665,17 +2719,17 @@ export function hexToRgb(hex: string) {
 export async function addColumn(name: string, type?: string) {
   await scrollIntoView(await driver.find('.active_section .mod-add-column'));
   await driver.find('.active_section .mod-add-column').click();
+  await findOpenMenu();
   await driver.findWait('.test-new-columns-menu-add-new', 100).click();
-  // If we are on a summary table, we could be see a menu helper
-  const menu = (await driver.findAll('.grist-floating-menu'))[0];
-  if (menu) {
-    await menu.findContent("li", "Add Column").click();
-  }
+  await waitForMenuToClose();
   await waitForServer();
+  await driver.findWait('.test-column-title-popup', 1000);
   await waitAppFocus(false);
   await driver.sendKeys(name);
   await driver.sendKeys(Key.ENTER);
   await waitForServer();
+  // Make sure the popup is gone.
+  assert.isFalse(await driver.find('.test-column-title-popup').isPresent());
   if (type) {
     await setType(exactMatch(type));
   }
@@ -2704,8 +2758,8 @@ export async function selectGrid() {
   await driver.find(".gridview_data_corner_overlay").click();
 }
 
-export async function selectColumn(col: string) {
-  await getColumnHeader({col}).click();
+export async function selectColumn(col: string|IColHeader) {
+  await getColumnHeader(col).click();
 }
 
 /**
@@ -2912,7 +2966,7 @@ export async function getDateFormat(): Promise<string> {
  */
 export async function setDateFormat(format: string|RegExp) {
   await driver.find('[data-test-id=Widget_dateFormat]').click();
-  await driver.findContentWait('.test-select-menu .test-select-row',
+  await findOpenMenuItem('.test-select-row',
     typeof format === 'string' ? exactMatch(format) : format, 200).click();
   await waitForServer();
 }
@@ -2937,7 +2991,7 @@ export async function getTimeFormat(): Promise<string> {
  */
 export async function setTimeFormat(format: string) {
   await driver.find('[data-test-id=Widget_timeFormat]').click();
-  await driver.findContent('.test-select-menu .test-select-row', format).click();
+  await findOpenMenuItem('.test-select-row', format).click();
   await waitForServer();
 }
 
@@ -2953,7 +3007,7 @@ export async function getRefShowColumn(): Promise<string> {
  */
 export async function setRefShowColumn(col: string) {
   await driver.find('.test-fbuilder-ref-col-select').click();
-  await driver.findContent('.test-select-menu .test-select-row', col).click();
+  await findOpenMenuItem('.test-select-row', col, 100).click();
   await waitForServer();
 }
 
@@ -2971,7 +3025,7 @@ export async function getRefTable(): Promise<string> {
  */
 export async function setRefTable(table: string) {
   await driver.find('.test-fbuilder-ref-table-select').click();
-  await driver.findContent('.test-select-menu .test-select-row', table).click();
+  await findOpenMenuItem('.test-select-row', table).click();
   await waitForServer();
 }
 
@@ -2984,7 +3038,7 @@ export async function selectBy(table: string|RegExp) {
   await driver.find('.test-config-data').click();
   await driver.find('.test-right-select-by').click();
   table = typeof table === 'string' ? exactMatch(table) : table;
-  await driver.findContentWait('.test-select-menu li', table, 200).click();
+  await findOpenMenuItem('li',  table, 200).click();
   await waitForServer();
 }
 
@@ -3196,7 +3250,10 @@ export async function filterBy(col: IColHeader|string, save: boolean, values: (s
  */
 export async function openColumnFilter(col: IColHeader|string) {
   await openColumnMenu(col, 'Filter');
-  return filterController;
+  return {
+    ...filterController,
+    open: () => openColumnMenu(col, 'Filter')
+  };
 }
 
 /**
@@ -3206,12 +3263,15 @@ export async function openPinnedFilter(col: string) {
   const filterBar = driver.find('.active_section .test-filter-bar');
   const pinnedFilter = filterBar.findContent('.test-filter-field', col);
   await pinnedFilter.click();
-  return filterController;
+  return {
+    ...filterController,
+    open: () => openPinnedFilter(col)
+  };
 }
 
 const filterController = {
   async toggleValue(value: string|RegExp) {
-    await driver.findContent('.test-filter-menu-list label', value).click();
+    await driver.findContentWait('.test-filter-menu-list label', value, 100).click();
     return this;
   },
   async none() {
@@ -3385,8 +3445,18 @@ export async function waitForAnchor() {
   await driver.wait(async () => (await getTestState()).anchorApplied, 2000);
 }
 
-export async function getAnchor() {
+export async function copyAnchor() {
   await driver.find('body').sendKeys(Key.chord(Key.SHIFT, await modKey(), 'a'));
+
+  await waitToPass(async () => {
+    assert.isTrue(
+      await driver.findContentWait('.test-notifier-toast-message', /Link copied to clipboard/, 100).isDisplayed()
+    );
+  });
+}
+
+export async function getAnchor() {
+  await copyAnchor();
   return (await getTestState()).clipboard || '';
 }
 
@@ -3405,6 +3475,7 @@ export async function getSectionTitles() {
 export async function renameSection(sectionTitle: string, name: string) {
   const renameWidget = driver.findContent(`.test-viewsection-title`, sectionTitle);
   await renameWidget.find(".test-widget-title-text").click();
+  await driver.findWait('.test-widget-title-popup', 100);
   await driver.find(".test-widget-title-section-name-input").click();
   await selectAll();
   await driver.sendKeys(name || Key.DELETE, Key.ENTER);
@@ -3413,6 +3484,7 @@ export async function renameSection(sectionTitle: string, name: string) {
 
 export async function renameActiveSection(name: string) {
   await driver.find(".active_section .test-viewsection-title .test-widget-title-text").click();
+  await driver.findWait('.test-widget-title-popup', 100);
   await driver.find(".test-widget-title-section-name-input").click();
   await selectAll();
   await driver.sendKeys(name || Key.DELETE, Key.ENTER);
@@ -3424,6 +3496,7 @@ export async function renameActiveSection(name: string) {
  */
 export async function renameActiveTable(name: string) {
   await driver.find(".active_section .test-viewsection-title .test-widget-title-text").click();
+  await driver.findWait('.test-widget-title-popup', 100);
   await driver.find(".test-widget-title-table-name-input").click();
   await selectAll();
   await driver.sendKeys(name, Key.ENTER);
@@ -3491,7 +3564,7 @@ type BehaviorActions = 'Clear and reset' | 'Convert column to data' | 'Clear and
 export async function changeBehavior(option: BehaviorActions|RegExp) {
   await openColumnPanel();
   await driver.find('.test-field-behaviour').click();
-  await driver.findContent('.grist-floating-menu li', option).click();
+  await findOpenMenuItem('li', option).click();
   await waitForServer();
 }
 
@@ -3504,6 +3577,7 @@ export async function columnBehavior() {
  */
 export async function availableBehaviorOptions() {
   await driver.find('.test-field-behaviour').click();
+  await findOpenMenu();
   const list = await driver.findAll('.grist-floating-menu li', el => el.getText());
   await driver.sendKeys(Key.ESCAPE);
   return list;
@@ -3592,7 +3666,7 @@ export async function setRangeFilterBound(minMax: 'min'|'max', value: string|{re
       if (!await driver.find('.grist-floatin-menu').isPresent()) {
         await driver.find(`.test-filter-menu-${minMax}`).click();
       }
-      await driver.findContent('.grist-floating-menu li', value.relative).click();
+      await findOpenMenuItem('li', value.relative).click();
     });
   }
 }
@@ -3667,7 +3741,7 @@ export async function setGristTheme(options: {
   if (!syncWithOS) {
     await scrollIntoView(driver.find('.test-theme-config-appearance .test-select-open'));
     await driver.find('.test-theme-config-appearance .test-select-open').click();
-    await driver.findContent('.test-select-menu li', appearance === 'light' ? 'Light' : 'Dark')
+    await findOpenMenuItem('li', appearance === 'light' ? 'Light' : 'Dark')
       .click();
     await waitForServer();
   }
@@ -3697,7 +3771,7 @@ export async function widgetAccess(level?: AccessLevel) {
     return Object.entries(text).find(e => e[1] === currentAccess)![0];
   } else {
     await driver.find('.test-config-widget-access .test-select-open').click();
-    await driver.findContent('.test-select-menu li', text[level]).click();
+    await findOpenMenuItem('li', text[level]).click();
     await waitForServer();
   }
 }
@@ -3923,9 +3997,9 @@ class Clipboard implements IClipboard {
   private async _performActionWithMenu(action: ClipboardAction) {
     const field = await driver.find('.active_section .field_clip.has_cursor');
     await driver.withActions(actions => { actions.contextClick(field); });
-    await driver.findWait('.grist-floating-menu', 1000);
+    await findOpenMenu(1000);
     const menuItemName = action.charAt(0).toUpperCase() + action.slice(1);
-    await driver.findContent('.grist-floating-menu li', menuItemName).click();
+    await findOpenMenuItem('li', menuItemName).click();
   }
 }
 
@@ -4055,7 +4129,7 @@ export async function getSelectValue(selector: string) {
 /** Sets a value on the select component */
 export async function setSelectValue(selector: string, value: string|RegExp) {
   await driver.find(`${selector} .test-select-row`).click();
-  await driver.findContent(`.test-select-menu li`, value).click();
+  await findOpenMenuItem('li', value).click();
   await waitForServer();
 }
 
@@ -4092,8 +4166,8 @@ export function buildSelectComponent(selector: string) {
     async options() {
       await driver.find(`${this.selector} .test-select-row`).click();
       // Wait for the menu.
-      await driver.findWait('.test-select-menu', 1000);
-      const options =  await driver.findAll(`.test-select-menu li`, el => el.getText());
+      await findOpenMenu();
+      const options =  await findOpenMenuAllItems('li', el => el.getText());
       await driver.sendKeys(Key.ESCAPE);
       return options;
     },
@@ -4114,6 +4188,34 @@ export function buildSelectComponent(selector: string) {
       });
     }
   };
+}
+
+export function findOpenMenu(timeoutMsec = 100) {
+  return driver.findWait('.grist-floating-menu', timeoutMsec);
+}
+
+export function findOpenMenuItem(itemSelector: string, itemContentMatcher: string|RegExp,  timeoutMsec = 100) {
+  return driver.findContentWait(`.grist-floating-menu ${itemSelector}`, itemContentMatcher, timeoutMsec);
+}
+
+export async function findOpenMenuAllItems<T>(
+  itemSelector: string,
+  mapper: (e: WebElement) => Promise<T>,
+  timeoutMsec = 100
+): Promise<T[]>   {
+  // Find at least one item to ensure the menu is open.
+  await driver.findWait(`.grist-floating-menu ${itemSelector}`, timeoutMsec);
+  return await driver.findAll(`.grist-floating-menu ${itemSelector}`, mapper);
+}
+
+export async function waitForNotPresent(selector: string) {
+  await waitToPass(async () => {
+    assert.isFalse(await driver.find(selector).isPresent());
+  });
+}
+
+export async function waitForMenuToClose() {
+  await waitForNotPresent('.grist-floating-menu');
 }
 
 

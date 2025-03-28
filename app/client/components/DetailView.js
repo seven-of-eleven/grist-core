@@ -1,3 +1,5 @@
+/* globals CustomEvent */
+
 const _             = require('underscore');
 const ko            = require('knockout');
 
@@ -93,6 +95,12 @@ function DetailView(gristDoc, viewSectionModel) {
     var rowModel = this.recordLayout.getContainingRow(elem, this.viewPane);
     var field = this.recordLayout.getContainingField(elem, this.viewPane);
     commands.allCommands.setCursor.run(rowModel, field);
+
+    // Trigger custom dom event that will bubble up. View components might not be rendered
+    // inside a virtual table which don't register this global handler (as there might be
+    // multiple instances of the virtual table component).
+    this.viewPane.dispatchEvent(new CustomEvent('setCursor', {detail: [rowModel, field], bubbles: true}));
+
     this._twoLastFieldIdsSelected.unshift(field.id());
     this._twoLastFieldIdsSelected.pop();
   });
@@ -377,6 +385,9 @@ DetailView.prototype.buildTitleControls = function() {
     ) {
       return false;
     }
+    if (this.viewSection.hideViewMenu()) {
+      return false;
+    }
     const linkingState = this.viewSection.linkingState();
     return !(linkingState && Boolean(linkingState.cursorPos));
   });
@@ -479,6 +490,10 @@ DetailView.prototype.scrollToCursor = function(sync = true) {
 
 DetailView.prototype._duplicateRows = async function() {
   const addRowIds = await BaseView.prototype._duplicateRows.call(this);
+  if (!addRowIds || addRowIds.length === 0) {
+    return;
+  }
+
   this.setCursorPos({rowId: addRowIds[0]})
 }
 
@@ -500,6 +515,10 @@ DetailView.prototype._canSingleClick = function(field) {
 };
 
 DetailView.prototype._clearCardFields = function() {
+  if (this.gristDoc.isReadonly.get()) {
+    return;
+  }
+
   const selection = this.getSelection();
   const isFormula = Boolean(selection.fields[0]?.column.peek().isRealFormula.peek());
   if (isFormula) {
@@ -553,6 +572,7 @@ DetailView.prototype._getFieldContextMenuOptions = function() {
   return {
     disableModify: Boolean(selection.fields[0]?.disableModify.peek()),
     isReadonly: this.gristDoc.isReadonly.get() || this.isPreview,
+    field: selection.fields[0],
   };
 }
 

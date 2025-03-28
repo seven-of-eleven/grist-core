@@ -166,8 +166,6 @@ const cssSubMenuElem = styled('div', `
   min-width: 200px;
 `);
 
-// TODO: menus are sometimes cut off in Safari.
-// Setting "overflow: visible fixes this, but breaks overflow elsewhere.
 export const cssMenuElem = styled('div', `
   font-family: ${vars.fontFamily};
   font-size: ${vars.mediumFontSize};
@@ -185,6 +183,17 @@ export const cssMenuElem = styled('div', `
     & {
       display: none;
     }
+  }
+`);
+
+// The original purpose of z-index is lost to time, but probably matters in the presence of other
+// popups (modals, tutorials, etc). For the case of menus (which can have submenus), it's moved
+// from cssMenuElem to cssMenuWrapElem to work aroung a bug of submenus getting cut off in Safari.
+// More on Safari issue: https://ecomgraduates.com/blogs/news/fixing-z-index-issue-on-safari-browser.
+const cssMenuWrapElem = styled('div', `
+  z-index: ${vars.menuZIndex};
+  & > .${cssMenuElem.className} {
+    z-index: auto;
   }
 `);
 
@@ -208,8 +217,13 @@ export const menuItemStatic = styled('div', menuItemStyle);
 
 export const menuCssClass = cssMenuElem.className;
 
+export const gristFloatingMenuClass = 'grist-floating-menu';
+
 // Add grist-floating-menu class to support existing browser tests
-const defaults = { menuCssClass: menuCssClass + ' grist-floating-menu' };
+const defaults = {
+  menuCssClass: menuCssClass + ' ' + gristFloatingMenuClass,
+  menuWrapCssClass: cssMenuWrapElem.className,
+};
 
 export interface SelectOptions<T> extends weasel.ISelectUserOptions {
   /** Additional DOM element args to pass to each select option. */
@@ -255,7 +269,8 @@ export function select<T>(obs: Observable<T>, optionArray: MaybeObsArray<IOption
   const {menuCssClass: menuClass, ...otherOptions} = weaselOptions;
   const selectOptions = {
     buttonArrow: cssInlineCollapseIcon('Collapse'),
-    menuCssClass: _menu.className + ' ' + (menuClass || ''),
+    menuCssClass: [_menu.className,  (menuClass || ''), gristFloatingMenuClass].join(' '),
+    menuWrapCssClass: cssMenuWrapElem.className,
     buttonCssClass: _btn.className,
     ...otherOptions,
   };
@@ -267,7 +282,7 @@ export function select<T>(obs: Observable<T>, optionArray: MaybeObsArray<IOption
       renderOptionArgs ? renderOptionArgs(op) : null,
       testId('select-row')
     )
-  ) as HTMLElement; // TODO: should be changed in weasel
+  );
 }
 
 /**
@@ -502,7 +517,8 @@ export function listOfMenuItems(items: () => DomElementArg[],) {
       items,
       {
         ...weasel.defaultMenuOptions,
-        menuCssClass: _menu.className + ' grist-floating-menu',
+        menuCssClass: _menu.className + ' ' + gristFloatingMenuClass,
+        menuWrapCssClass: cssMenuWrapElem.className,
         stretchToSelector: `.${cssSelectBtn.className}`,
         trigger: [(triggerElem, ctl) => {
           const isDisabled = () => triggerElem.classList.contains('disabled');
@@ -771,6 +787,7 @@ const cssMultiSelectMenu = styled(weasel.cssMenu, `
   max-width: 400px;
   padding-bottom: 0px;
   background-color: ${theme.menuBg};
+  z-index: ${vars.menuZIndex};
 `);
 
 const cssCheckboxLabel = styled(cssLabel, `
@@ -844,36 +861,46 @@ interface MenuItem {
   type?: 'header' | 'separator' | 'item'; // default to item.
 }
 
-export function buildMenu(definition: MenuDefinition, onclick?: (action: string) => any) {
-  function *buildMenuItems(current: MenuDefinition): IterableIterator<Element> {
-    for (const item of current) {
-      const isHeader = item.type === 'header' || item.header;
-      // If this is header with submenu.
-      if (isHeader && item.submenu) {
-        yield menuSubHeaderMenu(() => [...buildMenuItems(item.submenu!)], {}, item.header ?? item.label);
-        continue;
-      } else if (isHeader) {
-        yield menuSubHeader(item.header ?? item.label);
-        continue;
-      }
-
-      // Not a header, so it's an item or a separator.
-      if (item.type === 'separator') {
-        yield menuDivider();
-        continue;
-      }
-
-      // If this is an item with submenu.
-      if (item.submenu) {
-        yield menuItemSubmenu(() => [...buildMenuItems(item.submenu!)], {}, item.label);
-        continue;
-      }
-
-      // Not a submenu, so it's a regular item.
-      const action = typeof item.action === 'function' ? item.action : () => onclick?.(item.action as string);
-      yield menuItem(action, item.icon && menuIcon(item.icon), item.label, item.shortcut && cssCmdKey(item.shortcut));
-
-    }
-  }
+/**
+ * A helper method that can generate a menu (like context menu in GridView) out of a plain definition.
+ * Currently only used in Virtual Tables.
+ */
+export function menuBuilder(definition: Array<MenuItem>) {
   return menu((ctl) => [...buildMenuItems(definition)], {});
+}
+
+export function *buildMenuItems(current: Array<MenuItem>): IterableIterator<Element> {
+  for (const item of current) {
+    const isHeader = item.type === 'header' || item.header;
+    // If this is header with submenu.
+    if (isHeader && item.submenu) {
+      yield menuSubHeaderMenu(() => [...buildMenuItems(item.submenu!)], {}, item.header ?? item.label);
+      continue;
+    } else if (isHeader) {
+      yield menuSubHeader(item.header ?? item.label);
+      continue;
+    }
+
+    // Not a header, so it's an item or a separator.
+    if (item.type === 'separator') {
+      yield menuDivider();
+      continue;
+    }
+
+    // If this is an item with submenu.
+    if (item.submenu) {
+      yield menuItemSubmenu(() => [...buildMenuItems(item.submenu!)], {}, item.label);
+      continue;
+    }
+
+    // Not a submenu, so it's a regular item.
+    const action = typeof item.action === 'function' ? item.action : () => {};
+    yield menuItem(
+      action,
+      item.icon && menuIcon(item.icon),
+      item.label,
+      item.shortcut && cssCmdKey(item.shortcut),
+      item.disabled ? dom.cls('disabled', item.disabled) : null
+    );
+  }
 }

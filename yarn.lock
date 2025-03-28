@@ -538,13 +538,6 @@
     arg "^4.1.3"
     chalk "^4.1.0"
 
-"@gristlabs/pidusage@2.0.17":
-  version "2.0.17"
-  resolved "https://registry.npmjs.org/@gristlabs/pidusage/-/pidusage-2.0.17.tgz"
-  integrity sha512-CMBt3j6uVd/FaoVwPSTENkm3ly9FJbhzinaaWE1hGi+yhphKl2/8b+VOfJPf5kiz/phThoXGXQRNM0GB5jaAQw==
-  dependencies:
-    safe-buffer "^5.1.2"
-
 "@gristlabs/sqlite3@5.1.4-grist.8", "@gristlabs/sqlite3@^5.1.4-grist.7":
   version "5.1.4-grist.8"
   resolved "https://registry.yarnpkg.com/@gristlabs/sqlite3/-/sqlite3-5.1.4-grist.8.tgz#3b1a909c78617e2c7c9f6ee103bf6becbf457d57"
@@ -2060,10 +2053,10 @@ available-typed-arrays@^1.0.5:
   resolved "https://registry.yarnpkg.com/available-typed-arrays/-/available-typed-arrays-1.0.5.tgz#92f95616501069d07d10edb2fc37d3e1c65123b7"
   integrity sha512-DMD0KiN46eipeziST1LPP/STfDU0sufISXmjSgvVsoU2tqxctQeASejWcfNtxYKqETM1UxQ8sp2OrSBWpHY6sw==
 
-axios@1.7.4:
-  version "1.7.4"
-  resolved "https://registry.yarnpkg.com/axios/-/axios-1.7.4.tgz#4c8ded1b43683c8dd362973c393f3ede24052aa2"
-  integrity sha512-DukmaFRnY6AzAALSH4J2M3k6PkaC+MfaAGdEERRWcC9q3/TWQwLpHR8ZRLKTdQ3aBDL64EdluRDjJqKw+BPZEw==
+axios@1.8.2:
+  version "1.8.2"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-1.8.2.tgz#fabe06e241dfe83071d4edfbcaa7b1c3a40f7979"
+  integrity sha512-ls4GYBm5aig9vWx8AWDSGLpnpDQRtWAfrjU+EuytuODrFBkqesN2RkOQCBzrA1RQNHw1SmRMSDDDSwzNAYQ6Rg==
   dependencies:
     follow-redirects "^1.15.6"
     form-data "^4.0.0"
@@ -2948,13 +2941,10 @@ concat-stream@~1.5.0, concat-stream@~1.5.1:
     readable-stream "~2.0.0"
     typedarray "~0.0.5"
 
-connect-redis@3.4.0:
-  version "3.4.0"
-  resolved "https://registry.yarnpkg.com/connect-redis/-/connect-redis-3.4.0.tgz#4040dd3755bddbf93478fb84937a74052c31b965"
-  integrity sha512-YKPSO9tLwzUr8jzhsGMdSJUxevWrDt0ggXRcTMb+mtnJ/vWGlWV7RC4VUMgqvZv3uTGDFye8Bf7d6No0oSVkOQ==
-  dependencies:
-    debug "^4.0.1"
-    redis "^2.8.0"
+connect-redis@6.1.3:
+  version "6.1.3"
+  resolved "https://registry.yarnpkg.com/connect-redis/-/connect-redis-6.1.3.tgz#0a83c953f9ece45ae37d304a8e8d1c3c6a60b4b9"
+  integrity sha512-aaNluLlAn/3JPxRwdzw7lhvEoU6Enb+d83xnokUNhC9dktqBoawKWL+WuxinxvBLTz6q9vReTnUDnUslaz74aw==
 
 console-browserify@^1.1.0:
   version "1.2.0"
@@ -3250,7 +3240,7 @@ debug@2.6.9:
   dependencies:
     ms "2.0.0"
 
-debug@4, debug@^4.0.1, debug@^4.1.0, debug@^4.1.1, debug@^4.3.0, debug@^4.3.1, debug@^4.3.2, debug@^4.3.3, debug@~4.3.1:
+debug@4, debug@^4.1.0, debug@^4.1.1, debug@^4.3.0, debug@^4.3.1, debug@^4.3.2, debug@^4.3.3, debug@~4.3.1:
   version "4.3.7"
   resolved "https://registry.yarnpkg.com/debug/-/debug-4.3.7.tgz#87945b4151a011d76d95a198d7111c865c360a52"
   integrity sha512-Er2nc/H7RrMXZBFCEim6TCmMk02Z8vLC2Rbi1KEBggpo0fS6l0S1nnapwmIi3yW/+GOJap1Krg4w0Hg80oCqgQ==
@@ -3546,7 +3536,7 @@ dotenv@^16.0.3:
   resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-16.4.5.tgz#cdd3b3b604cb327e286b4762e13502f717cb099f"
   integrity sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==
 
-double-ended-queue@2.1.0-0, double-ended-queue@^2.1.0-0:
+double-ended-queue@2.1.0-0:
   version "2.1.0-0"
   resolved "https://registry.npmjs.org/double-ended-queue/-/double-ended-queue-2.1.0-0.tgz"
   integrity sha1-ED01J/0xUo9AGIEwyEHv3XgmTlw=
@@ -6797,6 +6787,13 @@ picomatch@^2.0.4, picomatch@^2.2.1, picomatch@^2.3.1:
   resolved "https://registry.yarnpkg.com/picomatch/-/picomatch-2.3.1.tgz#3ba3833733646d9d3e4995946c1365a67fb07a42"
   integrity sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==
 
+pidusage@4.0.0:
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/pidusage/-/pidusage-4.0.0.tgz#be3895830c793eb18931b412bcf58ce4d40cbd7b"
+  integrity sha512-89hVJc5gq157puLYZaO3CH0qfGyDfbDG1KFCE4lCSwK0l1EuEbNa4pIJJXL93ltU5SsYia/DHJUgMY2qE4XRQg==
+  dependencies:
+    safe-buffer "^5.2.1"
+
 pify@^2.3.0:
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/pify/-/pify-2.3.0.tgz#ed141a6ac043a849ea588498e7dca8b15330e90c"
@@ -6852,18 +6849,18 @@ popper-max-size-modifier@0.2.0:
   resolved "https://registry.npmjs.org/popper-max-size-modifier/-/popper-max-size-modifier-0.2.0.tgz"
   integrity sha512-UerPt9pZfTFnpSpIBVJrR3ibHMuU1k5K01AyNLfMUWCr4z1MFH+dsayPlAF9ZeYExa02HPiQn5OIMqUSVtJEbg==
 
-popper.js@1.15.0:
-  version "1.15.0"
-  resolved "https://registry.npmjs.org/popper.js/-/popper.js-1.15.0.tgz"
-  integrity sha512-w010cY1oCUmI+9KwwlWki+r5jxKfTFDVoadl7MSrIujHU5MJ5OR6HTDj6Xo8aoR/QsA56x8jKjA59qGH4ELtrA==
+popper.js@1.16.1:
+  version "1.16.1"
+  resolved "https://registry.yarnpkg.com/popper.js/-/popper.js-1.16.1.tgz#2a223cb3dc7b6213d740e40372be40de43e65b1b"
+  integrity sha512-Wb4p1J4zyFTbM+u6WuO4XstYx4Ky9Cewe4DWrel7B0w6VVICvPwdOpotjzcf6eD8TsckVnIMNONQyPIUFOUbCQ==
 
-popweasel@0.1.20:
-  version "0.1.20"
-  resolved "https://registry.yarnpkg.com/popweasel/-/popweasel-0.1.20.tgz#b69af57b08288dce398c2105cb1e8a9f4e0e324c"
-  integrity sha512-iG51KFrHL49YuWTeI2yGby8BdNewdtxiKRv6y+Pyh1CkRKenLFu5CPMaKDRLbfiQJeZ/t67WW0e9ggWTt09ClA==
+popweasel@0.1.23:
+  version "0.1.23"
+  resolved "https://registry.yarnpkg.com/popweasel/-/popweasel-0.1.23.tgz#5f11a2187468865d79b3d4ba10fcc3c004ea9c80"
+  integrity sha512-As979yrvk+F8lM94ZnRVpDiZT51GFLYqXQ7lG8HBIfcezYxXIKPU0xb9QhKqKfDa8sKZoZhR+cPdQoEfhAwEiQ==
   dependencies:
-    lodash "^4.17.15"
-    popper.js "1.15.0"
+    lodash "^4.17.21"
+    popper.js "1.16.1"
 
 postgres-array@~2.0.0:
   version "2.0.0"
@@ -7176,7 +7173,7 @@ rechoir@^0.7.0:
   dependencies:
     resolve "^1.9.0"
 
-redis-commands@^1.2.0, redis-commands@^1.7.0:
+redis-commands@^1.7.0:
   version "1.7.0"
   resolved "https://registry.npmjs.org/redis-commands/-/redis-commands-1.7.0.tgz"
   integrity sha512-nJWqw3bTFy21hX/CPKHth6sfhZbdiHP6bTawSgQBlKOVRG7EZkfHbbHwQJnrE4vsQf0CMNE+3gJ4Fmm16vdVlQ==
@@ -7186,11 +7183,6 @@ redis-errors@^1.0.0, redis-errors@^1.2.0:
   resolved "https://registry.npmjs.org/redis-errors/-/redis-errors-1.2.0.tgz"
   integrity sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==
 
-redis-parser@^2.6.0:
-  version "2.6.0"
-  resolved "https://registry.npmjs.org/redis-parser/-/redis-parser-2.6.0.tgz"
-  integrity sha1-Uu0J2srBCPGmMcB+m2mUHnoZUEs=
-
 redis-parser@^3.0.0:
   version "3.0.0"
   resolved "https://registry.npmjs.org/redis-parser/-/redis-parser-3.0.0.tgz"
@@ -7198,24 +7190,15 @@ redis-parser@^3.0.0:
   dependencies:
     redis-errors "^1.0.0"
 
-redis@3.1.1:
-  version "3.1.1"
-  resolved "https://registry.npmjs.org/redis/-/redis-3.1.1.tgz"
-  integrity sha512-QhkKhOuzhogR1NDJfBD34TQJz2ZJwDhhIC6ZmvpftlmfYShHHQXjjNspAJ+Z2HH5NwSBVYBVganbiZ8bgFMHjg==
+redis@~3.1.2:
+  version "3.1.2"
+  resolved "https://registry.yarnpkg.com/redis/-/redis-3.1.2.tgz#766851117e80653d23e0ed536254677ab647638c"
+  integrity sha512-grn5KoZLr/qrRQVwoSkmzdbw6pwF+/rwODtrOr6vuBRiR/f3rjSTGupbF90Zpqm2oenix8Do6RV7pYEkGwlKkw==
   dependencies:
     denque "^1.5.0"
     redis-commands "^1.7.0"
     redis-errors "^1.2.0"
     redis-parser "^3.0.0"
-
-redis@^2.8.0:
-  version "2.8.0"
-  resolved "https://registry.npmjs.org/redis/-/redis-2.8.0.tgz"
-  integrity sha512-M1OkonEQwtRmZv4tEWF2VgpG0JWJ8Fv1PhlgT5+B+uNq2cA3Rt1Yt/ryoR+vQNOQcIEgdCdfH0jr3bDpihAw1A==
-  dependencies:
-    double-ended-queue "^2.1.0-0"
-    redis-commands "^1.2.0"
-    redis-parser "^2.6.0"
 
 redlock@3.1.2:
   version "3.1.2"

@@ -1,4 +1,4 @@
-/* globals $, window */
+/* globals $, window, CustomEvent */
 
 const _         = require('underscore');
 const ko        = require('knockout');
@@ -56,6 +56,7 @@ const {CombinedStyle} = require("app/client/models/Styles");
 const {buildRenameColumn} = require('app/client/ui/ColumnTitle');
 const {makeT} = require('app/client/lib/localization');
 const {isList} = require('app/common/gristTypes');
+const identity = require('lodash/identity');
 
 
 const t = makeT('GridView');
@@ -97,6 +98,11 @@ function GridView(gristDoc, viewSectionModel, isPreview = false) {
   this.isScrolledTop = this.autoDispose(ko.computed(() => this.scrollTop() > 0));
 
   this.cellSelector = selector.CellSelector.create(this, this);
+
+  // A handler that can amend the custom cell/row menu with additional items.
+  // It is a function (menuItems: Element[]) => Element[]. Primarily used by virtual tables.
+  this.customCellMenu = identity;
+  this.customRowMenu = identity;
 
   if (!isPreview && !this.gristDoc.comparison) {
     this.selectionSummary = SelectionSummary.create(this,
@@ -286,6 +292,8 @@ GridView.selectionCommands = {
   cancel: function() { this.clearSelection(); }
 }
 
+// TODO: move commands with modifications to gridEditCommands and use a single guard for
+// readonly state.
 GridView.gridCommands = {
   cursorDown: function() {
     if (this.cursor.rowIndex() === this.viewData.peekLength - 1) {
@@ -334,33 +342,12 @@ GridView.gridCommands = {
   fieldEditSave: function() { this.cursor.rowIndex(this.cursor.rowIndex() + 1); },
   // Re-define editField after fieldEditSave to make it take precedence for the Enter key.
   editField: function(event) { closeRegisteredMenu(); this.scrollToCursor(true); this.activateEditorAtCursor({event}); },
-
-  insertFieldBefore: function(maybeKeyboardEvent) {
-    if (!maybeKeyboardEvent) {
-      this._openInsertColumnMenu(this.cursor.fieldIndex());
-    } else {
-      this.insertColumn(null, {index: this.cursor.fieldIndex()});
-    }
-  },
-  insertFieldAfter: function(maybeKeyboardEvent) {
-    if (!maybeKeyboardEvent) {
-      this._openInsertColumnMenu(this.cursor.fieldIndex() + 1);
-    } else {
-      this.insertColumn(null, {index: this.cursor.fieldIndex() + 1});
-    }
-  },
+  insertFieldBefore: function(event) { this._insertField(event, this.cursor.fieldIndex()); },
+  insertFieldAfter: function(event) { this._insertField(event, this.cursor.fieldIndex() + 1); },
   makeHeadersFromRow: function() { this.makeHeadersFromRow(this.getSelection()); },
   renameField: function() { this.renameColumn(this.cursor.fieldIndex()); },
   hideFields: function() { this.hideFields(this.getSelection()); },
-  deleteFields: function() {
-    const selection = this.getSelection();
-    const count = selection.colIds.length;
-    this.deleteColumns(selection).then((result) => {
-      if (result !== false) {
-        reportUndo(this.gristDoc, `You deleted ${count} column${count > 1 ? 's' : ''}.`);
-      }
-    });
-  },
+  deleteFields: function() { this._deleteFields(); },
   clearValues: function() { this.clearValues(this.getSelection()); },
   clearColumns: function() { this._clearColumns(this.getSelection()); },
   convertFormulasToData: function() { this._convertFormulasToData(this.getSelection()); },
@@ -743,6 +730,10 @@ GridView.prototype.clearSelection = function() {
  * @param {CopySelection} selection
  */
 GridView.prototype.clearValues = function(selection) {
+  if (this.isReadonly) {
+    return;
+  }
+
   const options = this._getColumnMenuOptions(selection);
   if (options.isFormula === true) {
     this.activateEditorAtCursor({ init: ''});
@@ -755,8 +746,11 @@ GridView.prototype.clearValues = function(selection) {
 };
 
 GridView.prototype._clearColumns = function(selection) {
+  if (this.isReadonly) {
+    return;
+  }
   const fields = selection.fields;
-  return this.gristDoc.clearColumns(fields.map(f => f.colRef.peek()));
+  return this.gristDoc.docModel.clearColumns(fields.map(f => f.colRef.peek()));
 };
 
 GridView.prototype._convertFormulasToData = function(selection) {
@@ -765,7 +759,7 @@ GridView.prototype._convertFormulasToData = function(selection) {
   // prevented by ACL rules).
   const fields = selection.fields.filter(f => f.column.peek().isFormula.peek());
   if (!fields.length) { return null; }
-  return this.gristDoc.convertIsFormula(fields.map(f => f.colRef.peek()), {toFormula: false});
+  return this.gristDoc.docModel.convertIsFormula(fields.map(f => f.colRef.peek()), {toFormula: false});
 };
 
 GridView.prototype.selectAll = function() {
@@ -797,6 +791,13 @@ GridView.prototype.assignCursor = function(elem, elemType) {
     let row = this.domToRowModel(elem, elemType);
     let col = this.domToColModel(elem, elemType);
     commands.allCommands.setCursor.run(row, col);
+
+    // Trigger custom dom event that will bubble up. View components might not be rendered
+    // inside a virtual table which don't register this global handler (as there might be
+    // multiple instances of the virtual table component).
+    const event = new CustomEvent('setCursor', {detail: [row, col], bubbles: true});
+    this.scrollPane.dispatchEvent(event);
+
   } catch(e) {
     console.error(e);
     console.error("GridView.assignCursor expects a row/col header, or cell as an input.");
@@ -963,6 +964,10 @@ GridView.prototype.deleteColumns = function(selection) {
 };
 
 GridView.prototype.hideFields = function(selection) {
+  if (this.gristDoc.isReadonly.get()) {
+    return;
+  }
+
   var actions = selection.fields.map(field => ['RemoveRecord', field.id()]);
   return this.gristDoc.docModel.viewFields.sendTableActions(actions, `Hide columns ${actions.map(a => a[1]).join(', ')} ` +
   `from ${this.tableModel.tableData.tableId}.`);
@@ -1465,7 +1470,7 @@ GridView.prototype.buildDom = function() {
           // This is a little hack to position the menu the same way as with a click,
           // the same hack as on a column menu.
           ev.preventDefault();
-          ev.currentTarget.querySelector('.menu_toggle').click();
+          ev.currentTarget.querySelector('.menu_toggle')?.click();
         }),
         self.isPreview ? null : menuToggle(null,
           dom.on('click', ev => self.maybeSelectRow(ev.currentTarget.parentNode, row.getRowId())),
@@ -1895,7 +1900,7 @@ GridView.prototype.columnContextMenu = function(ctl, copySelection, field, filte
     return buildColumnContextMenu({
       filterOpenFunc: () => filterTriggerCtl.open(),
       sortSpec: this.gristDoc.viewModel.activeSection.peek().activeSortSpec.peek(),
-      colId: field.column.peek().id.peek(),
+      colRowId: field.column.peek().id.peek(),
       ...options,
     });
   }
@@ -1949,25 +1954,33 @@ GridView.prototype.maybeSelectRow = function(elem, rowId) {
 };
 
 GridView.prototype.rowContextMenu = function() {
-  return RowContextMenu(this._getRowContextMenuOptions());
+  const options = this._getRowContextMenuOptions();
+  return this.customRowMenu(RowContextMenu(options), options);
 };
 
 GridView.prototype._getRowContextMenuOptions = function() {
   return {
     ...this._getCellContextMenuOptions(),
     disableShowRecordCard: this.isRecordCardDisabled(),
+    disableAnchorLink: this.viewSection.isVirtual(),
+
   };
 };
 
 GridView.prototype.isRecordCardDisabled = function() {
   return BaseView.prototype.isRecordCardDisabled.call(this) ||
-    this.getSelection().onlyAddRowSelected();
+    this.getSelection().onlyAddRowSelected() ||
+    this.viewSection.isVirtual();
 }
 
 GridView.prototype.cellContextMenu = function() {
-  return CellContextMenu(
-    this._getCellContextMenuOptions(),
-    this._getColumnMenuOptions(this.getSelection())
+  const options = this._getCellContextMenuOptions();
+  return this.customCellMenu(
+    CellContextMenu(
+      options,
+      this._getColumnMenuOptions(this.getSelection())
+    ),
+    options
   );
 };
 
@@ -1989,6 +2002,7 @@ GridView.prototype._getCellContextMenuOptions = function() {
       this.getSelection().onlyAddRowSelected() ||
       this.viewSection.table().summarySourceTable() !== 0
     ),
+    disableAnchorLink: this.viewSection.isVirtual(),
     isViewSorted: this.viewSection.activeSortSpec.peek().length > 0,
     numRows: this.getSelection().rowIds.length,
   };
@@ -2002,6 +2016,10 @@ GridView.prototype.scrollToCursor = function(sync = true) {
 
 GridView.prototype._duplicateRows = async function() {
   const addRowIds = await BaseView.prototype._duplicateRows.call(this);
+  if (!addRowIds || addRowIds.length === 0) {
+    return;
+  }
+
   // Highlight duplicated rows if the grid is not sorted (or the sort doesn't affect rowIndex).
   const topRowIndex = this.viewData.getRowIndex(addRowIds[0]);
   // Set row on the first record added.
@@ -2126,6 +2144,32 @@ GridView.prototype._openInsertColumnMenu = function(columnIndex) {
     this.scrollPaneRight();
     this._insertColumnIndex(-1);
   }
+}
+
+GridView.prototype._insertField = function(event, index) {
+  if (this.gristDoc.isReadonly.get()) {
+    return;
+  }
+
+  if (!event) {
+    this._openInsertColumnMenu(index);
+  } else {
+    this.insertColumn(null, {index});
+  }
+}
+
+GridView.prototype._deleteFields = function() {
+  if (this.gristDoc.isReadonly.get()) {
+    return;
+  }
+
+  const selection = this.getSelection();
+  const count = selection.colIds.length;
+  this.deleteColumns(selection).then((result) => {
+    if (result !== false) {
+      reportUndo(this.gristDoc, `You deleted ${count} column${count > 1 ? 's' : ''}.`);
+    }
+  });
 }
 
 function buildStyleOption(owner, computedRule, optionName) {

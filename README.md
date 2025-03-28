@@ -6,7 +6,7 @@ Grist is a modern relational spreadsheet. It combines the flexibility of a sprea
 * [`grist-desktop`](https://github.com/gristlabs/grist-desktop) is a Linux/macOS/Windows desktop app for viewing and editing spreadsheets stored locally.
 * [`grist-static`](https://github.com/gristlabs/grist-static) is a fully in-browser build of Grist for displaying spreadsheets on a website without back-end support.
 
-The `grist-core` repo is the heart of Grist, including the hosted services offered by [Grist Labs](https://getgrist.com), an NYC-based company 🇺🇸 and Grist's main developer. The French government agency [ANCT Données et Territoires](https://donnees.incubateur.anct.gouv.fr/toolbox/grist) 🇫🇷 has also made significant contributions to the codebase.
+The `grist-core` repo is the heart of Grist, including the hosted services offered by [Grist Labs](https://getgrist.com), an NYC-based company 🇺🇸 and Grist's main developer. The French government 🇫🇷 organizations [ANCT Données et Territoires](https://donnees.incubateur.anct.gouv.fr/toolbox/grist) and [DINUM (Direction Interministérielle du Numérique)](https://www.numerique.gouv.fr/dinum/) have also made significant contributions to the codebase.
 
 The `grist-core`, `grist-desktop`, and `grist-static` repositories are all open source (Apache License, Version 2.0).
 
@@ -118,6 +118,63 @@ environments.
 You can find a lot more about configuring Grist, setting up authentication,
 and running it on a public server in our
 [Self-Managed Grist](https://support.getgrist.com/self-managed/) handbook.
+
+## Using Grist with OpenRouter for Model Agnostic and Claude Support
+
+(Instructions contributed by @lshalon)
+
+Grist's AI Formula Assistant can be configured to use OpenRouter instead of connecting directly to OpenAI, allowing you to access a wide range of AI models including Anthropic's Claude models. This isn't the only way to use Claude models, but it's a good option if you want to use Claude models with Grist or intend to use other cheaper, faster, or potentially newer models. That's because this configuration gives you more flexibility in choosing the AI model that works best for your formula generation needs.
+To set up OpenRouter integration, configure the following environment variables:
+
+### Required: Set the endpoint to OpenRouter's API
+
+```
+ASSISTANT_CHAT_COMPLETION_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+```
+
+### Required: Your OpenRouter API key
+
+```
+ASSISTANT_API_KEY=your_openrouter_api_key_here
+```
+
+Sign up for an OpenRouter API key at <https://openrouter.ai/>
+
+### Optional: Specify which model to use (examples below)
+
+```
+ASSISTANT_MODEL=anthropic/claude-3.7-sonnet
+```
+
+### or other options like
+
+```
+ASSISTANT_MODEL=deepseek/deepseek-r1-zero:free
+```
+
+```
+ASSISTANT_MODEL=qwen/qwq-32b:free
+```
+
+```
+ASSISTANT_MODEL=mistralai/mistral-saba
+```
+
+### Optional: Set a larger context model for fallback
+
+```
+ASSISTANT_LONGER_CONTEXT_MODEL=anthropic/claude-3-opus-20240229
+```
+
+With this configuration, Grist's AI Formula Assistant will route requests through OpenRouter to your specified model. This allows you to:
+
+Access Anthropic's Claude models which excel at understanding context and generating accurate formulas
+Switch between different AI models without changing your Grist configuration
+Take advantage of OpenRouter's routing capabilities to optimize for cost, speed, or quality
+
+You can find the available models and their identifiers on the OpenRouter website.
+Note: Make sure not to set the OPENAI_API_KEY variable when using OpenRouter, as this would override the OpenRouter configuration.
+
 
 ## Available Docker images
 
@@ -303,6 +360,7 @@ Grist can be configured in many ways. Here are the main environment variables it
 | GRIST_SESSION_DOMAIN               | if set, associates the cookie with the given domain - otherwise defaults to GRIST_DOMAIN                                                                                                                                                                                                                                                                      |
 | GRIST_SESSION_SECRET               | a key used to encode sessions                                                                                                                                                                                                                                                                                                                                 |
 | GRIST_SKIP_BUNDLED_WIDGETS         | if set, Grist will ignore any bundled widgets included via NPM packages.                                                                                                                                                                                                                                                                                      |
+| GRIST_SQLITE_MODE                  | if set to `wal`, use SQLite in [WAL mode](https://www.sqlite.org/wal.html), if set to `sync`, use SQLite with [SYNCHRONOUS=full](https://www.sqlite.org/pragma.html#pragma_synchronous)
 | GRIST_ANON_PLAYGROUND              | When set to `false` deny anonymous users access to the home page (but documents can still be shared to anonymous users). Defaults to `true`.                                                                                                                                                                                                                  |
 | GRIST_FORCE_LOGIN                  | Setting it to `true` is similar to setting `GRIST_ANON_PLAYGROUND: false` but it blocks any anonymous access (thus any document shared publicly actually requires the users to be authenticated before consulting them)                                                                                                                                       |
 | GRIST_SINGLE_ORG                   | set to an org "domain" to pin client to that org                                                                                                                                                                                                                                                                                                              |
@@ -331,7 +389,8 @@ Grist can be configured in many ways. Here are the main environment variables it
 | GRIST_SNAPSHOT_KEEP                | optional. Number of recent snapshots to retain unconditionally for a document, regardless of when they were made                                                                                                                                                                                                                                              |
 | GRIST_PROMCLIENT_PORT              | optional. If set, serve the Prometheus metrics on the specified port number. ⚠️ Be sure to use a port which is not publicly exposed ⚠️.                                                                                                                                                                                                                       |
 | GRIST_ENABLE_SCIM                  | optional. If set, enable the [SCIM API Endpoint](https://support.getgrist.com/install/scim/) (experimental)                                                                                                                                                                                                                                                   |
-
+| GRIST_OIDC_...                  | optional. Environment variables used to configure OpenID authentification. See [OpenID Connect](https://support.getgrist.com/install/oidc/) documentation for full related list of environment variables.                                                                                                                                                                                                                                                  |
+| GRIST_SAML_...                  | optional. Environment variables used to configure SAML authentification. See [SAML](https://support.getgrist.com/install/saml/) documentation for full related list of environment variables.                                                                                                                                                                                                                                                  |
 #### AI Formula Assistant related variables (all optional):
 
 Variable | Purpose

@@ -2,8 +2,8 @@ import {findLinks} from 'app/client/lib/textUtils';
 import {sameDocumentUrlState, urlState} from 'app/client/models/gristUrlState';
 import {hideInPrintView, testId, theme} from 'app/client/ui2018/cssVars';
 import {cssIconSpanBackground, iconSpan} from 'app/client/ui2018/icons';
-import {CellValue} from 'app/plugin/GristData';
-import {dom, DomArg, IDomArgs, Observable, styled} from 'grainjs';
+import {useBindable} from 'app/common/gutil';
+import {BindableValue, dom, DomArg, IDomArgs, styled} from 'grainjs';
 
 /**
  * Styling for a simple <A HREF> link.
@@ -20,11 +20,11 @@ export const cssLink = styled('a', `
   }
 `);
 
-export function gristLink(href: string|Observable<string>, ...args: IDomArgs<HTMLElement>) {
+export function gristLink(href: BindableValue<string>, ...args: IDomArgs<HTMLElement>) {
   return dom("a",
-    dom.attr("href", href),
+    dom.attr("href", (use) => withAclAsUserParam(useBindable(use, href))),
     dom.attr("target", "_blank"),
-    dom.on("click", ev => onClickHyperLink(ev, typeof href === 'string' ? href : href.get())),
+    dom.on("click", handleGristLinkClick),
     // stop propagation to prevent the grist custom context menu to show up and let the default one
     // to show up instead.
     dom.on("contextmenu", ev => ev.stopPropagation()),
@@ -54,16 +54,17 @@ export function gristIconLink(href: string, label = href) {
  * If possible (i.e. if `url` points to somewhere in the current document)
  * use pushUrl to navigate without reloading or opening a new tab
  */
-export async function onClickHyperLink(ev: MouseEvent, url: CellValue) {
+export function handleGristLinkClick(ev: MouseEvent, elem: HTMLAnchorElement) {
   // Only override plain-vanilla clicks.
   if (ev.shiftKey || ev.metaKey || ev.ctrlKey || ev.altKey) { return; }
 
-  const newUrlState = sameDocumentUrlState(url);
+  const newUrlState = sameDocumentUrlState(elem.href);
   if (!newUrlState) { return; }
 
   ev.preventDefault();
-  await urlState().pushUrl(newUrlState);
+  urlState().pushUrl(newUrlState).catch(reportError);
 }
+
 
 /**
  * Generates dom contents out of a text with clickable links.
@@ -85,6 +86,34 @@ export function makeLinks(text: string) {
     console.warn("makeLinks failed", ex);
     return text;
   }
+}
+
+/**
+ * Returns a modified version of `href` with the value of `aclAsUser_` from
+ * the current URL, if present.
+ *
+ * Only works for same document URLs (i.e. URLs that can be navigated to
+ * without reloading the page).
+ */
+function withAclAsUserParam(href: string) {
+  const state = urlState().state.get();
+  const aclAsUser = state.params?.linkParameters?.aclAsUser;
+  if (!aclAsUser) {
+    return href;
+  }
+
+  let hrefWithParams: string;
+  try {
+    const url = new URL(href);
+    if (!url.searchParams.has("aclAsUser_")) {
+      url.searchParams.set("aclAsUser_", aclAsUser);
+    }
+    hrefWithParams = url.href;
+  } catch {
+    return href;
+  }
+
+  return sameDocumentUrlState(hrefWithParams) ? hrefWithParams : href;
 }
 
 // For links we want to break all the parts, not only words.
